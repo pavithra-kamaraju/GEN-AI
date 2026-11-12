@@ -1,0 +1,147 @@
+services:
+  - type: web
+    name: deepsearch-api
+    runtime: python
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.11"
+      - key: HF_HOME
+        value: /tmp/.cache/huggingface
+      - key: DATABASE_URL
+        fromDatabase:
+          name: deepsearch-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: deepsearch-redis
+          type: keyvalue
+          property: connectionString
+      - key: INGESTION_WORKER_EXTERNAL_URL
+        fromService:
+          name: deepsearch-ingestion-worker
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: INGESTION_WORKER_WAKE_TOKEN
+        fromService:
+          name: deepsearch-ingestion-worker
+          type: web
+          envVarKey: INGESTION_WORKER_WAKE_TOKEN
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ACCESS_TOKEN_MINUTES
+        value: "15"
+      - key: REFRESH_TOKEN_DAYS
+        value: "7"
+      - key: FRONTEND_ORIGIN
+        value: https://hackthon-for.onrender.com
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: qwen/qwen3.8-27b
+      - key: EMAIL_PROVIDER
+        value: brevo
+      - key: BREVO_API_URL
+        value: https://api.brevo.com/v3/smtp/email
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        value: DeepSearch
+      - key: EMAIL_HTTP_TIMEOUT_SECONDS
+        value: "10"
+      - key: STORAGE_BACKEND
+        value: database
+      - key: LOCAL_STORAGE_DIR
+        value: /tmp/deepsearch/storage
+      - key: UPLOAD_DIR
+        value: /tmp/deepsearch
+      - key: EMBEDDING_MODEL_REPO
+        value: Xenova/all-MiniLM-L6-v2
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: ORT_INTRA_OP_NUM_THREADS
+        value: "1"
+      - key: ORT_INTER_OP_NUM_THREADS
+        value: "1"
+      - key: MALLOC_ARENA_MAX
+        value: "2"
+      - key: DEBUG
+        value: "false"
+
+
+  - type: web
+    name: deepsearch-ingestion-worker
+    runtime: python
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.worker_http:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.11"
+      - key: HF_HOME
+        value: /tmp/.cache/huggingface
+      - key: DATABASE_URL
+        fromDatabase:
+          name: deepsearch-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: deepsearch-redis
+          type: keyvalue
+          property: connectionString
+      - key: STORAGE_BACKEND
+        value: database
+      - key: LOCAL_STORAGE_DIR
+        value: /tmp/deepsearch/storage
+      - key: UPLOAD_DIR
+        value: /tmp/deepsearch
+      - key: EMBEDDING_MODEL_REPO
+        value: Xenova/all-MiniLM-L6-v2
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: ORT_INTRA_OP_NUM_THREADS
+        value: "1"
+      - key: ORT_INTER_OP_NUM_THREADS
+        value: "1"
+      - key: MALLOC_ARENA_MAX
+        value: "2"
+      - key: INGESTION_WORKER_WAKE_TOKEN
+        generateValue: true
+
+  - type: keyvalue
+    name: deepsearch-redis
+    region: singapore
+    ipAllowList: []
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    persistenceMode: off
+
+  - type: web
+    name: hackthon-for
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://hackthon-for-aft8.onrender.com
+
+databases:
+  - name: deepsearch-db
+    region: singapore
+    plan: free
+    databaseName: deepsearch
